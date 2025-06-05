@@ -1,0 +1,83 @@
+✅ Discord 학습 피드백 봇 명령어 설계도
+
+📌 `/생성` : 사용자 초기 등록
+- 사용자의 Discord ID를 기준으로 중복 등록 방지.
+- 등록 정보 입력 항목:
+  - 닉네임
+  - 이전 학점
+  - 목표 학점
+  - 목표일 (YYYY-MM-DD)
+  - 학점 만점 기준 (예: 4.5)
+- 유효성 검사:
+  - 학점: 0보다 작거나 5.0보다 크면 오류
+  - 목표일이 오늘 이전이면 오류
+- 오류 발생 시 “다시 입력” 버튼을 통해 재입력 가능.
+- 등록 정보는 `user_profiles`와 `user_profiles.txt`에 저장됨.
+
+📌 `/입력` : 오늘 루틴 입력
+- 하루 1회만 입력 가능 (같은 날 입력하면 `/상태`로 전환).
+- 루틴 입력은 3단계 Modal로 나눔:
+  1. Step 1: `screen_study`, `netflix_hours`, `social_media_hours`
+  2. Step 2: `mental_health_rating`, `stress_level`, `sleep_hours`
+  3. Step 3: `time_management_score`, `study_hours_per_day`, `attendance_percentage`
+- `screen_time` = screen_study + netflix_hours + social_media_hours
+- `previous_gpa`는 4.0 기준으로 스케일링되어 내부 모델에 사용.
+- 모델 예측: `rf_model.pkl` 기반 - 성적 변화(-1, 0, 1) 예측
+- SHAP 기반 자연어 피드백 생성 (설정된 말투 적용)
+- 입력 데이터는 `user_dataset.csv`, `user_input_log.csv`에 저장됨.
+- 결과는 피드백 메시지 + SHAP 시각화 이미지로 제공됨.
+
+ 📌 `/입력수정` (예정): 오늘 입력한 루틴 데이터를 수정
+- 당일 입력 기록이 있는 경우 수정 폼 제공.
+- 수정 후 다시 `/입력`으로 재입력 가능.
+
+📌 `/상태` : 최근 3일 루틴 평가
+- 사용자의 최근 3일 입력 데이터를 기반으로 예측 수행.
+- SHAP 분석 및 자연어 피드백 생성.
+- `matplotlib`로 주요 변수별 추이 그래프 생성.
+- 피드백 스타일은 사용자가 설정한 말투에 따라 달라짐.
+- SHAP 이미지와 루틴 추이 그래프 함께 응답.
+
+📌 `/전체상태` : 전체 입력 기록 분석
+- 전체 입력 기록을 바탕으로 평균 루틴 계산 및 예측.
+- 전체 기간 루틴 추이 시각화 + SHAP 중요도 표시.
+- SHAP 기반 자연어 피드백 + 변수별 변화 요약도 생성됨.
+- 변화 요약은 시작값과 최근값 비교 → 피드백 메시지 출력
+
+📌 `/설정` : 피드백 말투 및 학점 기준 설정
+- 피드백 말투 설정: `친근함`, `분석적`, `동기부여` 중 택 1
+- 학점 만점 기준 (예: 4.5)을 입력받아 `previous_gpa` 스케일 조정에 사용
+- 선택 UI를 통해 설정 → 설정값은 `user_profiles`에 저장됨
+
+📌 `/리마인더` : 루틴 입력 알림 설정
+- 사용자가 원하는 요일 및 시간 설정 가능 (예: 월, 수, 금 08:00)
+- 두 단계 Select UI:
+  1. 요일 선택 (복수 선택 가능)
+  2. 시간 선택 (하루 한 번, 시간 단위)
+- 설정된 시간에 Discord DM으로 루틴 입력 알림 발송
+- 리마인더는 `user_profiles["reminder"]`에 저장
+- `reminder_scheduler()`가 주기적으로 확인하여 알림 보냄
+- 예정 기능: `/리마인더 해제`, `/리마인더 목록`
+
+📌 `/프로필` : 내 프로필 정보 확인
+- 등록한 닉네임, 학점, 목표일, 말투, 리마인더 설정 등을 요약 출력
+- 최종 학점이 입력된 경우도 함께 표시
+
+📌 `/초기화` : 사용자 정보 및 데이터 초기화
+- 본인 확인을 위해 닉네임 재입력 요구
+- 일치할 경우 `user_profiles`, `user_dataset`에서 데이터 삭제
+- `user_profiles.txt`, `user_dataset.csv`에 반영
+
+📌 추가 동작
+- 목표일 도달 시, `/입력` 사용 시 성적 입력 폼이 표시됨 (`GoalGpaInputModal`)
+- 목표일 이후 하루가 지난 시점에서 자동 DM 알림 발송 (`🎯 목표일이 지났습니다`)
+- SHAP 기반 피드백은 말투에 따라 상위 feature 개수 다르게 제공:
+  - 친근함: 3개
+  - 동기부여: 5개
+  - 분석적: 전체 출력
+
+✅ 내부 사용 데이터
+- 사용자 프로필 저장: `user_profiles.txt`
+- 루틴 입력 저장: `user_dataset.csv`, `user_input_log.csv`
+- 종합 통계 저장: `user_total_dataset.csv`
+- 모델 파일: `rf_model.pkl` (RandomForest 기반)
